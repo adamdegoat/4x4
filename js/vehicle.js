@@ -244,7 +244,7 @@ export class Vehicle {
     }
 
     // keep inside the map
-    const lim = 197;
+    const lim = 470;
     if (Math.abs(this.pos.x) > lim) { this.pos.x = Math.sign(this.pos.x) * lim; this.vel.x *= -0.3; }
     if (Math.abs(this.pos.z) > lim) { this.pos.z = Math.sign(this.pos.z) * lim; this.vel.z *= -0.3; }
 

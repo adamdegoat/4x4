@@ -12,7 +12,8 @@ export const DAY = {
 
 // t: 0 = 4:45 pm, 1 = night
 const KEYS = [
-  { t: 0.0,  fog: 0x8a977d, dens: 0.030, sky: 0xc4d2b4, gnd: 0x3b3322, hemi: 2.2, sun: 0xffe6b8, sunI: 2.6, elev: 32, dap: 1.0, ff: 0, tint: 1.0 },
+  // t = 0 is the game's daylight: heavy overcast, grey-green haze, flat light
+  { t: 0.0,  fog: 0x6c776f, dens: 0.036, sky: 0xa3ada4, gnd: 0x2e2c24, hemi: 2.5, sun: 0xcfd6cc, sunI: 1.2, elev: 55, dap: 0.3, ff: 0, tint: 1.06 },
   { t: 0.42, fog: 0x9c8a64, dens: 0.033, sky: 0xd8b284, gnd: 0x33271a, hemi: 1.7, sun: 0xffab62, sunI: 2.1, elev: 9, dap: 0.8, ff: 0, tint: 1.0 },
   { t: 0.6,  fog: 0x4a4b58, dens: 0.040, sky: 0x6a6a88, gnd: 0x1a1510, hemi: 1.4, sun: 0xff7a48, sunI: 0.6, elev: 1, dap: 0.25, ff: 0.3, tint: 1.05 },
   { t: 0.78, fog: 0x1b232d, dens: 0.047, sky: 0x44547a, gnd: 0x100d09, hemi: 1.4, sun: 0x8090b8, sunI: 0.6, elev: 40, dap: 0.0, ff: 0.8, tint: 1.12 },

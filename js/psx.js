@@ -213,6 +213,27 @@ export function makeTextures() {
     }
   });
 
+  // road gravel: grey-tan chips
+  T.gravel = canvasTex(32, (g, s) => {
+    const r = rng(71);
+    g.fillStyle = '#7d7564'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 520; i++) {
+      const v = r();
+      g.fillStyle = v < 0.3 ? '#8f8876' : v < 0.55 ? '#6a6252' : v < 0.75 ? '#a39b86' : v < 0.9 ? '#5a5244' : '#8a6e4c';
+      g.fillRect((r() * s) | 0, (r() * s) | 0, 1 + ((r() * 2) | 0), 1);
+    }
+  });
+  // old tarmac: dark, cracked, patched
+  T.tar = canvasTex(64, (g, s) => {
+    const r = rng(81);
+    g.fillStyle = '#3c3c3a'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 900; i++) { const v = r(); g.fillStyle = v < 0.4 ? '#454542' : v < 0.7 ? '#333331' : v < 0.9 ? '#4d4c48' : '#2a2a28'; g.fillRect((r() * s) | 0, (r() * s) | 0, 1, 1); }
+    g.strokeStyle = '#1f1f1e'; g.lineWidth = 1;
+    for (let i = 0; i < 7; i++) { let x = r() * s, y = r() * s; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 6; k++) { x += (r() - 0.5) * 12; y += (r() - 0.5) * 12; g.lineTo(x, y); } g.stroke(); }
+    for (let i = 0; i < 3; i++) { g.fillStyle = r() < 0.5 ? '#2f2f2d' : '#4a4843'; g.fillRect((r() * s) | 0, (r() * s) | 0, 6 + ((r() * 10) | 0), 5 + ((r() * 8) | 0)); }
+    for (let i = 0; i < 40; i++) { g.fillStyle = '#4c5a30'; g.fillRect((r() * s) | 0, (r() * s) | 0, 1, 1 + ((r() * 2) | 0)); } // weeds in the cracks
+  });
+
   return T;
 }
 
@@ -242,14 +263,16 @@ export class PsxPipeline {
         tDiffuse: { value: this.rt.texture },
         uRes: { value: new THREE.Vector2(4, 4) },
         uSeed: { value: 0 },
-        uGrain: { value: 0.06 },
+        uGrain: { value: 0.085 },
         uFlash: { value: 0 },
         uTint: { value: new THREE.Vector3(1, 1, 1) },
+        uSat: { value: 0.62 },
+        uVig: { value: 1.25 },
       },
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: `
         precision highp float;
-        uniform sampler2D tDiffuse; uniform vec2 uRes; uniform float uSeed; uniform float uGrain; uniform float uFlash; uniform vec3 uTint;
+        uniform sampler2D tDiffuse; uniform vec2 uRes; uniform float uSeed; uniform float uGrain; uniform float uFlash; uniform vec3 uTint; uniform float uSat; uniform float uVig;
         varying vec2 vUv;
         float bayer(vec2 p){
           // 4x4 ordered dither
@@ -270,8 +293,10 @@ export class PsxPipeline {
           c = mix(c * 12.92, 1.055 * pow(max(c, 0.0), vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
           // grain, per low-res pixel, fresh seed every frame
           c += (hash(pix) - 0.5) * uGrain;
-          // vignette
-          vec2 v = vUv - 0.5; c *= 1.0 - dot(v, v) * 0.9;
+          // washed-out colour with a sickly green cast, heavy vignette
+          float lum = dot(c, vec3(0.299, 0.587, 0.114));
+          c = mix(vec3(lum), c, uSat) * vec3(0.96, 1.02, 0.97);
+          vec2 v = vUv - 0.5; c *= 1.0 - dot(v, v) * uVig;
           c += uFlash;
           // 15-bit colour with ordered dither (the PS1's own trick)
           c = floor(c * 31.0 + bayer(pix) + 0.5) / 31.0;

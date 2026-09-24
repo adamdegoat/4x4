@@ -85,6 +85,92 @@ export class Sound {
     const bed = this.noise(); const blp = c.createBiquadFilter(); blp.type = 'lowpass'; blp.frequency.value = 220;
     const bg = c.createGain(); bg.gain.value = 0.12; bed.connect(blp); blp.connect(bg); bg.connect(amb); bed.start();
     this.nextCritter = 0;
+    // a low drone under everything, barely there: two detuned tones, slowly beating
+    const drone = c.createGain(); drone.gain.value = 0.05; drone.connect(this.master);
+    const dlp = c.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 180; dlp.connect(drone);
+    for (const f of [55, 55.7, 82.4]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; const g = c.createGain(); g.gain.value = 0.3; o.connect(g); g.connect(dlp); o.start(); }
+    // radio static near the mast
+    this.staticN = this.noise(); const sbp = c.createBiquadFilter(); sbp.type = 'bandpass'; sbp.frequency.value = 2200; sbp.Q.value = 0.6;
+    this.staticG = c.createGain(); this.staticG.gain.value = 0;
+    const chop = c.createGain(); const lfo = c.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 7; const lg = c.createGain(); lg.gain.value = 0.4; lfo.connect(lg); lg.connect(chop.gain);
+    this.staticN.connect(sbp); sbp.connect(chop); chop.connect(this.staticG); this.staticG.connect(this.master);
+    this.staticN.start(); lfo.start();
+    this.quietUntil = 0;
+  }
+
+  // the insects stop, all at once. Then come back slowly.
+  silence(sec) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.amb.gain.cancelScheduledValues(t);
+    this.amb.gain.setTargetAtTime(0.02, t, 0.25);
+    this.amb.gain.setTargetAtTime(0.55, t + sec, 2.5);
+    this.quietUntil = t + sec;
+  }
+
+  static(level) {
+    if (!this.ctx) return;
+    this.staticG.gain.setTargetAtTime(level * level * 0.12, this.ctx.currentTime, 0.2);
+  }
+
+  // distant gong: inharmonic partials, long decay, far off to one side
+  gong() {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime, p = c.createStereoPanner(); p.pan.value = Math.random() * 2 - 1; p.connect(this.master);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700; lp.connect(p);
+    const base = 90 + Math.random() * 40;
+    for (const [m, a] of [[1, 0.06], [2.4, 0.035], [3.9, 0.02], [5.4, 0.012]]) {
+      const o = c.createOscillator(); o.frequency.value = base * m;
+      const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0005, t + 5);
+      o.connect(g); g.connect(lp); o.start(t); o.stop(t + 5.2);
+    }
+  }
+
+  // wood creaking somewhere close
+  creak() {
+    if (!this.ctx) return;
+    const c = this.ctx, t = c.currentTime, n = this.noise(false);
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 18;
+    bp.frequency.setValueAtTime(300 + Math.random() * 200, t); bp.frequency.linearRampToValueAtTime(180 + Math.random() * 120, t + 1.2);
+    const am = c.createGain(); const lfo = c.createOscillator(); lfo.frequency.value = 22 + Math.random() * 18; const lg = c.createGain(); lg.gain.value = 0.5; lfo.connect(lg); lg.connect(am.gain);
+    const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.35, t + 0.2); g.gain.linearRampToValueAtTime(0, t + 1.3);
+    const p = c.createStereoPanner(); p.pan.value = Math.random() * 2 - 1;
+    n.connect(bp); bp.connect(am); am.connect(g); g.connect(p); p.connect(this.master);
+    n.start(t); lfo.start(t); n.stop(t + 1.4); lfo.stop(t + 1.4);
+  }
+
+  // three slow knocks on wood
+  knock() {
+    if (!this.ctx) return;
+    const c = this.ctx, t0 = c.currentTime, p = c.createStereoPanner(); p.pan.value = Math.random() * 2 - 1; p.connect(this.master);
+    for (let i = 0; i < 3; i++) {
+      const t = t0 + i * (0.55 + Math.random() * 0.1);
+      const o = c.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(190, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.08);
+      const g = c.createGain(); g.gain.setValueAtTime(0.18, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      o.connect(g); g.connect(p); o.start(t); o.stop(t + 0.15);
+    }
+  }
+
+  // a woman humming, far away. Four notes, never resolved.
+  hum() {
+    if (!this.ctx) return;
+    const c = this.ctx, t0 = c.currentTime;
+    const p = c.createStereoPanner(); p.pan.value = Math.random() < 0.5 ? -0.8 : 0.8; p.connect(this.master);
+    const f1 = c.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 600; f1.Q.value = 3; f1.connect(p);
+    const o = c.createOscillator(); o.type = 'triangle';
+    const vib = c.createOscillator(); vib.frequency.value = 5.2; const vg = c.createGain(); vg.gain.value = 4; vib.connect(vg); vg.connect(o.frequency);
+    const g = c.createGain(); g.gain.value = 0;
+    o.connect(g); g.connect(f1);
+    const notes = [293.7, 329.6, 311.1, 261.6];
+    notes.forEach((f, i) => { o.frequency.setTargetAtTime(f, t0 + i * 0.9, 0.08); });
+    g.gain.setTargetAtTime(0.045, t0, 0.3); g.gain.setTargetAtTime(0, t0 + 3.4, 0.4);
+    o.start(t0); vib.start(t0); o.stop(t0 + 5); vib.stop(t0 + 5);
+  }
+
+  // air pushed past your ear
+  whoosh() {
+    if (!this.ctx) return;
+    this.burst(0.25, { freq: 500, q: 0.4, dur: 0.9, type: 'bandpass' });
   }
 
   critter(t) {
@@ -92,7 +178,7 @@ export class Sound {
     const c = this.ctx;
     const r = Math.random();
     const p = c.createStereoPanner(); p.pan.value = Math.random() * 2 - 1; p.connect(this.amb);
-    if (r < 0.7) {
+    if (r < 0.45) {
       // frog: a few quick nasal pulses
       const n = 2 + (Math.random() * 4) | 0, f = 280 + Math.random() * 500;
       for (let i = 0; i < n; i++) {

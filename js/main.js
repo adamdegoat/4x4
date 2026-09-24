@@ -8,6 +8,7 @@ import { Input } from './input.js';
 import { Sky } from './sky.js';
 import { buildLandmarks } from './landmarks.js';
 import { MiniMap } from './minimap.js';
+import { Haunt } from './haunt.js';
 
 const Q = new URLSearchParams(location.search);
 const LINES = +Q.get('res') || 240;       // vertical render resolution, the PS1 ran 240
@@ -47,12 +48,15 @@ const carObj = new THREE.Group();
 scene.add(carObj);
 const cockpit = buildCockpit(carObj);
 const s = world.terrain.start;
+// build the ground around the start before anything moves
+world.ensure({ x: s.x, z: s.z }, 999);
 car.place(s.x, s.z, s.heading);
 // daytime only: no headlights
 cockpit.setLights(false);
 
 const sound = new Sound();
 const input = new Input(document.body);
+const haunt = new Haunt(scene, world, sound);
 input.onReset = () => car.unflip();
 
 // ---- sizing ----
@@ -99,7 +103,9 @@ function updateCamera(dt) {
   camera.position.copy(head).applyMatrix4(carObj.matrixWorld);
   // look a little into the turn, like a driver does
   lookYaw += ((-car.steer * 0.35) - lookYaw) * Math.min(1, dt * 4);
-  _e.set(-0.06 + Math.sin(t * 41) * 0.02 * sh + neck.z * 0.4, lookYaw + Math.sin(t * 37) * 0.025 * sh, Math.sin(t * 29) * 0.02 * sh - neck.x * 0.3, 'YXZ');
+  // free look from swiping: turn your head, the car keeps its heading
+  const ly = lookYaw + input.look.yaw, lp = input.look.pitch;
+  _e.set(-0.06 + lp + Math.sin(t * 41) * 0.02 * sh + neck.z * 0.4, ly + Math.sin(t * 37) * 0.025 * sh, Math.sin(t * 29) * 0.02 * sh - neck.x * 0.3, 'YXZ');
   camera.quaternion.copy(car.quat).multiply(_q.setFromEuler(_e));
 }
 
@@ -129,8 +135,9 @@ function frame(now) {
   const sk = sky.update(dt, now / 1000, false); // daytime only: the light never moves on
   psx.mat.uniforms.uTint.value.setScalar(sk.tint);
   cockpit.setBeamStrength(sk.dark);
-  world.update(camera.position, now / 1000, FAR, sk.ff);
-  landmarks.update(camera.position, FAR);
+  world.update(camera.position, now / 1000, FAR);
+  landmarks.update(camera.position, FAR, now / 1000);
+  if (running && !paused) { const q = car.quat; haunt.update(dt, camera.position, { x: -(2 * (q.x * q.z + q.w * q.y)), z: -(1 - 2 * (q.x * q.x + q.y * q.y)) }, car.speed, true); }
   if (running) minimap.update(dt, car);
   if (running) sound.update(car, dt);
   else for (const k in car.events) car.events[k] = 0;
@@ -174,5 +181,5 @@ document.getElementById('resume').addEventListener('pointerdown', (e) => { e.pre
 document.addEventListener('visibilitychange', () => { if (document.hidden && running && !paused) input.onPause(); });
 
 // test hooks for the harness
-window.__game = { sky, car, world, camera, input, cockpit, get fps() { return fps; }, scene, renderer };
+window.__game = { haunt, sound, sky, car, world, camera, input, cockpit, get fps() { return fps; }, scene, renderer };
 document.body.classList.add('ready');
