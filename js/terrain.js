@@ -114,7 +114,7 @@ export function buildTerrain(seed = 7) {
     const x = (rnd() * 2 - 1) * (HALF - 45), z = (rnd() * 2 - 1) * (HALF - 45);
     const nearTrail = distToPaths(x, z) < 6;
     if (nearTrail && rnd() > 0.35) continue; // a few block the trail on purpose
-    const len = 5 + rnd() * 9, r = 0.22 + rnd() * 0.3, a = rnd() * Math.PI;
+    const len = 5 + rnd() * 9, r = 0.2 + rnd() * 0.24, a = rnd() * Math.PI;
     const y = heightRaw(x, z) + r * 0.55; // half sunk into the leaf litter
     logs.push({ x, z, a, len, r, y, ca: Math.cos(a), sa: Math.sin(a) });
   }
@@ -123,7 +123,7 @@ export function buildTerrain(seed = 7) {
     const x = (rnd() * 2 - 1) * (HALF - 40), z = (rnd() * 2 - 1) * (HALF - 40);
     const near = Math.abs(z - streamZ(x)) < 10 ? 1 : 0; // rocks cluster in the stream
     if (!near && rnd() > 0.45) continue;
-    const r = 0.25 + rnd() * rnd() * 1.1;
+    const r = 0.25 + rnd() * rnd() * 0.8;
     rocks.push({ x, z, r, y: heightRaw(x, z) - r * 0.35 });
   }
 
@@ -172,13 +172,15 @@ export function buildTerrain(seed = 7) {
   // surface grip + drag at a point
   function surfaceAt(x, z) {
     const m = fieldAt(mud, x, z);
-    const w = x > -HALF && x < HALF ? (groundAt(x, z) < waterY(x) ? 1 : 0) : 0;
+    const w = Math.abs(z - streamZ(x)) < 9 && groundAt(x, z) < waterY(x) ? 1 : 0; // only the stream itself
     return { mud: m, water: w, grip: lerp(1.0, 0.5, m) * (w ? 0.75 : 1) };
   }
 
   const start = { x: trail[3][0], z: trail[3][1], heading: Math.atan2(trail[6][0] - trail[3][0], trail[6][1] - trail[3][1]) };
 
-  return { heights, trailW, mud, wet, logs, rocks, paths, streamZ, waterY, heightAt, groundAt, surfaceAt, distToPaths, start, broad };
+  const waterDepthAt = (x, z) => (Math.abs(z - streamZ(x)) < 9 ? Math.max(0, waterY(x) - groundAt(x, z)) : 0);
+
+  return { waterDepthAt, heights, trailW, mud, wet, logs, rocks, paths, streamZ, waterY, heightAt, groundAt, surfaceAt, distToPaths, start, broad };
 }
 
 export function sampleGrid(arr, x, z) {

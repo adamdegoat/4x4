@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildTerrain, sampleGrid, SIZE, HALF, CELL, N } from './terrain.js';
 import { mulberry32, clamp, fbm } from './noise.js';
 import { psxify } from './psx.js';
+import { dappleHook } from './sky.js';
 
 const CHUNK = 50;
 const CN = SIZE / CHUNK;
@@ -113,7 +114,7 @@ export function buildWorld(scene, tex, seed = 7) {
   const chunkOf = (x, z) => chunks[clamp(Math.floor((z + HALF) / CHUNK), 0, CN - 1) * CN + clamp(Math.floor((x + HALF) / CHUNK), 0, CN - 1)];
 
   // ---- materials ----
-  const L = (o) => psxify(new THREE.MeshLambertMaterial(o));
+  const L = (o) => psxify(new THREE.MeshLambertMaterial(o), dappleHook, 'd');
   const mats = {
     ground: L({ map: tex.ground, vertexColors: true }),
     bark: L({ map: tex.bark }),
@@ -123,7 +124,7 @@ export function buildWorld(scene, tex, seed = 7) {
     vine: L({ map: tex.vine, alphaTest: 0.5, side: THREE.DoubleSide }),
     log: L({ map: tex.log }),
     rock: L({ map: tex.rock }),
-    water: psxify(new THREE.MeshPhongMaterial({ color: 0x0b1411, specular: 0x8899aa, shininess: 60, transparent: true, opacity: 0.88 })),
+    water: psxify(new THREE.MeshPhongMaterial({ color: 0x5a4424, specular: 0x9aa890, shininess: 40, transparent: true, opacity: 0.9 })),
   };
 
   // ---- ground chunks ----
@@ -182,7 +183,7 @@ export function buildWorld(scene, tex, seed = 7) {
 
   // ---- placement helpers ----
   const onTrail = (x, z) => sampleGrid(terrain.trailW, x, z);
-  const inWater = (x, z) => terrain.groundAt(x, z) < terrain.waterY(x) + 0.1;
+  const inWater = (x, z) => Math.abs(z - terrain.streamZ(x)) < 9 && terrain.groundAt(x, z) < terrain.waterY(x) + 0.1;
   const inset = HALF - 6;
   const pick = () => [(rnd() * 2 - 1) * inset, (rnd() * 2 - 1) * inset];
   const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3(), tmpE = new THREE.Euler();
@@ -240,6 +241,9 @@ export function buildWorld(scene, tex, seed = 7) {
     return { x, y, z, s, ry: rnd() * 6.28 };
   });
   instance(giants, giantTreeGeo(), mats.bark, { colorVar: 0.35 });
+  const gCrowns = new Map();
+  for (const [ch, list] of giants) gCrowns.set(ch, list.map((o) => ({ x: o.x, y: o.y + 30 + rnd() * 3, z: o.z, s: 2.2 + rnd() * 1.2, sy: 0.7, ry: rnd() * 6.28 })));
+  instance(gCrowns, crossedCards(7, 4.5, 4, -2.2), mats.leaves, { colorVar: 0.3 });
 
   // mid trees
   const mids = scatter(2200, (x, z) => onTrail(x, z) < 0.05 && !inWater(x, z), (x, z) => {
@@ -273,7 +277,7 @@ export function buildWorld(scene, tex, seed = 7) {
   instance(palms, palmGeo(), mats.palm, { colorVar: 0.45 });
 
   // ferns and ground cover
-  const ferns = scatter(16000, (x, z) => onTrail(x, z) < 0.6, (x, z) => {
+  const ferns = scatter(16000, (x, z) => onTrail(x, z) < 0.6 && !inWater(x, z), (x, z) => {
     const s = 0.6 + rnd() * 0.8;
     addBrush(x, z, 0.12, 0.9 * s);
     return { x, y: terrain.groundAt(x, z) - 0.05, z, s, ry: rnd() * 6.28 };
@@ -330,7 +334,7 @@ export function buildWorld(scene, tex, seed = 7) {
   ffGeo.setAttribute('position', new THREE.BufferAttribute(ffPos, 3));
   ffGeo.setAttribute('aPhase', new THREE.BufferAttribute(ffPhase, 1));
   const ffMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uCenter: { value: new THREE.Vector3() } },
+    uniforms: { uTime: { value: 0 }, uCenter: { value: new THREE.Vector3() }, uAlpha: { value: 1 } },
     vertexShader: `
       attribute float aPhase; uniform float uTime; uniform vec3 uCenter; varying float vA;
       void main(){
@@ -344,7 +348,7 @@ export function buildWorld(scene, tex, seed = 7) {
         gl_Position = projectionMatrix * mv;
         gl_PointSize = 2.0;
       }`,
-    fragmentShader: `varying float vA; void main(){ if (vA < 0.05) discard; gl_FragColor = vec4(vec3(0.75, 1.0, 0.35) * vA, 1.0); }`,
+    fragmentShader: `uniform float uAlpha; varying float vA; void main(){ float a = vA * uAlpha; if (a < 0.05) discard; gl_FragColor = vec4(vec3(0.75, 1.0, 0.35) * a, 1.0); }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
   });
   const fireflies = new THREE.Points(ffGeo, ffMat);
@@ -353,7 +357,9 @@ export function buildWorld(scene, tex, seed = 7) {
 
   const brushAt = (x, z) => sampleGrid(brush, x, z);
 
-  function update(camPos, time, farDist) {
+  function update(camPos, time, farDist, ff = 1) {
+    ffMat.uniforms.uAlpha.value = ff;
+    fireflies.visible = ff > 0.02;
     const lim = farDist + CHUNK * 0.75;
     for (const ch of chunks) {
       const dx = ch.userData.cx - camPos.x, dz = ch.userData.cz - camPos.z;

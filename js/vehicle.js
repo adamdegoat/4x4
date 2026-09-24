@@ -22,6 +22,7 @@ export const CAR = {
     new THREE.Vector3(-0.66, -0.12, 0.92),
     new THREE.Vector3(0.66, -0.12, 0.92),
   ],
+  antiRoll: 9000,
   maxSteer: 0.58,
   drive: 4300,         // max tractive force at low speed (N, all wheels)
   power: 36000,        // W; force falls off as P / v
@@ -123,13 +124,19 @@ export class Vehicle {
         wh.contact = true;
         const comp = clamp(maxLen - dist, 0, CAR.rest + 0.1);
         wh.comp = comp;
-        const compVel = (comp - wh.prevComp) / dt;
+        // clamp: stepping onto a log edge makes compression jump in one tick, and an
+        // unclamped damper turns that into a huge kick that launches the car
+        const rawCV = (comp - wh.prevComp) / dt;
+        const compVel = clamp(rawCV, -3, 3);
         let Fs = CAR.k * comp + (compVel > 0 ? CAR.cBump : CAR.cRebound) * compVel;
+        // anti-roll bar: resist this wheel being more squashed than its partner
+        const other = this.wheels[w ^ 1];
+        Fs += CAR.antiRoll * (comp - (other.contact ? other.comp : 0));
         // bump stop
-        if (comp > CAR.rest * 0.85) Fs += (comp - CAR.rest * 0.85) * 90000;
+        if (comp > CAR.rest * 0.85) Fs += Math.min(8000, (comp - CAR.rest * 0.85) * 60000);
         Fs = Math.max(0, Fs);
         wh.load = Fs;
-        if (compVel > 1.6) this.events.bump = Math.max(this.events.bump, Math.min(1, (compVel - 1.6) / 4));
+        if (rawCV > 1.6) this.events.bump = Math.max(this.events.bump, Math.min(1, (rawCV - 1.6) / 4));
 
         // ground normal for friction plane
         const hL = T.heightAt(px - 0.4, pz), hR = T.heightAt(px + 0.4, pz);
@@ -159,7 +166,7 @@ export class Vehicle {
 
         const surf = T.surfaceAt(px, pz);
         wh.grip = surf.grip; wh.water = surf.water;
-        if (surf.water) waterDepth = Math.max(waterDepth, T.waterY(px) - gy);
+        if (surf.water) waterDepth = Math.max(waterDepth, T.waterDepthAt(px, pz));
         const mu = 1.05 * surf.grip;
         const Fmax = mu * Fs;
 
@@ -168,7 +175,7 @@ export class Vehicle {
         let Flat = -vLat * mEff / dt * 0.55;
         // longitudinal
         let Flong = this.gear * driveF / 4;
-        const rollRes = (80 + surf.mud * 900 + (surf.water ? 600 : 0)) * Math.sign(vLong) * Math.min(1, Math.abs(vLong) * 2);
+        const rollRes = (80 + surf.mud * 320 + (surf.water ? 350 : 0)) * Math.sign(vLong) * Math.min(1, Math.abs(vLong) * 2);
         Flong -= rollRes;
         if (brake > 0 || throttle === 0) {
           // brakes; off the gas there's engine braking, and when nearly stopped
@@ -184,37 +191,33 @@ export class Vehicle {
         wh.spin += (vLong / CAR.wheelR) * dt;
         _f.copy(wf).multiplyScalar(Flong).addScaledVector(wr, Flat);
         // friction applied at a point a little above the contact patch
-        const fp = new THREE.Vector3().copy(cp).lerp(mount, 0.45);
+        const fp = new THREE.Vector3().copy(cp).lerp(mount, 0.85);
         addForceAt(_f, fp);
       } else {
         wh.contact = false; wh.comp = 0; wh.load = 0; wh.slip = 0;
       }
     }
 
-    // --- hull contact: roof/bumpers/belly against the ground ----------------
-    for (const c of CAR.hull) {
-      const p = _v.copy(c).applyQuaternion(q).add(this.pos);
-      const gy = T.heightAt(p.x, p.z);
-      const pen = gy - p.y;
-      if (pen > 0) {
-        _r.subVectors(p, this.pos);
-        const pvel = new THREE.Vector3().crossVectors(this.ang, _r).add(this.vel);
-        const Fn = pen * 120000 - Math.min(0, pvel.y) * 6000;
-        _f.set(-pvel.x * 900, Math.max(0, Fn), -pvel.z * 900);
-        addForceAt(_f, p);
-        if (pvel.y < -2.5) this.events.bump = 1;
-      }
-    }
-
     // water drag + air drag
     if (waterDepth > 0) {
       const d = clamp(waterDepth, 0, 0.9);
-      force.addScaledVector(this.vel, -d * 1400);
+      force.addScaledVector(this.vel, -d * 700);
       force.y += d * 2500; // a little buoyancy
       if (vabs > 1.5) this.events.splash = Math.max(this.events.splash, clamp(vabs / 8, 0, 1) * d * 1.5);
     }
     force.addScaledVector(this.vel, -this.vel.length() * 1.1);
     torque.addScaledVector(this.ang, anyContact ? -120 : -40);
+    if (anyContact) {
+      // damp roll and pitch rates (not yaw) so knocks don't snowball into a rollover
+      const yawRate = this.ang.dot(_up);
+      _t.copy(this.ang).addScaledVector(_up, -yawRate);
+      torque.addScaledVector(_t, -380);
+      // and a gentle hand back toward upright; a hard hit can still roll you
+      if (_up.y > 0.25) {
+        _t.set(-_up.z, 0, _up.x); // up x worldUp: turns the roof back toward the sky
+        torque.addScaledVector(_t, 2000);
+      }
+    }
 
     // --- integrate ------------------------------------------------------------
     this.vel.addScaledVector(force, dt / CAR.mass);
@@ -224,6 +227,12 @@ export class Vehicle {
     this.pos.addScaledVector(this.vel, dt);
     const a = this.ang, qa = _q.set(a.x * dt * 0.5, a.y * dt * 0.5, a.z * dt * 0.5, 0).multiply(q);
     q.x += qa.x; q.y += qa.y; q.z += qa.z; q.w += qa.w; q.normalize();
+
+    // --- body against the ground: bumpers, belly, roof ------------------------------
+    // Resolved as impulses along the ground normal, never as a stiff spring:
+    // a spring here stored energy and could fling the car into the air when
+    // the nose dug into a bank.
+    this.collideHull(T);
 
     // --- trunks: circle collisions against tree trunks --------------------------
     this.collideTrees(dt);
@@ -243,6 +252,40 @@ export class Vehicle {
     _up.set(0, 1, 0).applyQuaternion(q);
     this.upsideTime = _up.y < 0.3 && this.vel.length() < 2 ? this.upsideTime + dt : 0;
     this.upright = _up.y;
+  }
+
+  collideHull(T) {
+    const q = this.quat;
+    for (const c of CAR.hull) {
+      const p = _v.copy(c).applyQuaternion(q).add(this.pos);
+      const gy = T.heightAt(p.x, p.z);
+      const pen = gy - p.y;
+      if (pen <= 0) continue;
+      const e = 0.25;
+      const n = _n.set(T.heightAt(p.x - e, p.z) - T.heightAt(p.x + e, p.z), 2 * e, T.heightAt(p.x, p.z - e) - T.heightAt(p.x, p.z + e)).normalize();
+      // gentle positional fix along the normal
+      this.pos.addScaledVector(n, Math.min(pen * n.y, 0.03));
+      _r.subVectors(p, this.pos);
+      const pvel = new THREE.Vector3().crossVectors(this.ang, _r).add(this.vel);
+      const vn = pvel.dot(n);
+      if (vn >= 0) continue;
+      if (vn < -2.5) this.events.bump = Math.max(this.events.bump, Math.min(1, -vn / 6));
+      const rxn = new THREE.Vector3().crossVectors(_r, n);
+      const k = 1 / CAR.mass + rxn.clone().applyMatrix3(_mInvI).dot(rxn);
+      const j = -(1 + 0.05) * vn / k;
+      this.vel.addScaledVector(n, j / CAR.mass);
+      this.ang.add(rxn.applyMatrix3(_mInvI).multiplyScalar(j));
+      // scraping friction along the ground
+      const vt = pvel.addScaledVector(n, -vn);
+      const vtl = vt.length();
+      if (vtl > 1e-3) {
+        const jt = Math.min(0.6 * j, vtl / k);
+        const td = vt.multiplyScalar(-1 / vtl);
+        this.vel.addScaledVector(td, jt / CAR.mass);
+        const rxt = new THREE.Vector3().crossVectors(_r, td);
+        this.ang.add(rxt.applyMatrix3(_mInvI).multiplyScalar(jt));
+      }
+    }
   }
 
   collideTrees(dt) {

@@ -5,6 +5,7 @@ import { Vehicle } from './vehicle.js';
 import { buildCockpit, HEAD } from './cockpit.js';
 import { Sound } from './audio.js';
 import { Input } from './input.js';
+import { Sky } from './sky.js';
 
 const Q = new URLSearchParams(location.search);
 const LINES = +Q.get('res') || 240;       // vertical render resolution, the PS1 ran 240
@@ -27,11 +28,12 @@ scene.fog = new THREE.FogExp2(fogCol, FOG);
 
 const camera = new THREE.PerspectiveCamera(62, 1, 0.05, FAR);
 
-// night: barely any moon gets through the canopy
-scene.add(new THREE.HemisphereLight(0x3a4a66, 0x0c0a06, 1.4));
-const moon = new THREE.DirectionalLight(0x7f93b8, 0.8);
-moon.position.set(-30, 60, 20);
-scene.add(moon);
+// sky light + one directional light that is the sun, then the moon
+const hemi = new THREE.HemisphereLight(0xc4d2b4, 0x3b3322, 2);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffe6b8, 2.5);
+scene.add(sun);
+const sky = new Sky(scene, hemi, sun, +Q.get('time') || 0);
 
 // ---- world + car ----
 const tex = makeTextures();
@@ -42,11 +44,11 @@ scene.add(carObj);
 const cockpit = buildCockpit(carObj);
 const s = world.terrain.start;
 car.place(s.x, s.z, s.heading);
+// daytime only: no headlights
+cockpit.setLights(false);
 
 const sound = new Sound();
 const input = new Input(document.body);
-input.onLights = () => { cockpit.setLights(!cockpit.lightsOn); document.getElementById('btnLights').classList.toggle('off', !cockpit.lightsOn); if (!cockpit.lightsOn) cockpit.setRoof(false), document.getElementById('btnRoof').classList.remove('lit'); };
-input.onRoof = () => { if (!cockpit.lightsOn) return; cockpit.setRoof(!cockpit.roofOn); document.getElementById('btnRoof').classList.toggle('lit', cockpit.roofOn); };
 input.onReset = () => car.unflip();
 
 // ---- sizing ----
@@ -57,7 +59,6 @@ function resize() {
   camera.updateProjectionMatrix();
   psx.setSize(w, h);
 }
-psx.mat.uniforms.uTint.value.setScalar(1.15);
 addEventListener('resize', resize);
 resize();
 
@@ -120,7 +121,10 @@ function frame(now) {
   }
   updateCamera(dt);
   cockpit.update(car, dt);
-  world.update(camera.position, now / 1000, FAR);
+  const sk = sky.update(dt, now / 1000, false); // daytime only: the light never moves on
+  psx.mat.uniforms.uTint.value.setScalar(sk.tint);
+  cockpit.setBeamStrength(sk.dark);
+  world.update(camera.position, now / 1000, FAR, sk.ff);
   if (running) sound.update(car, dt);
   else for (const k in car.events) car.events[k] = 0;
   psx.render(scene, camera);
@@ -155,5 +159,5 @@ document.getElementById('resume').addEventListener('pointerdown', (e) => { e.pre
 document.addEventListener('visibilitychange', () => { if (document.hidden && running && !paused) input.onPause(); });
 
 // test hooks for the harness
-window.__game = { car, world, camera, input, cockpit, get fps() { return fps; }, scene, renderer };
+window.__game = { sky, car, world, camera, input, cockpit, get fps() { return fps; }, scene, renderer };
 document.body.classList.add('ready');

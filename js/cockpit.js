@@ -170,5 +170,8 @@ export function buildCockpit(car) {
     gauges.rpm.rotation.z = -(Math.PI * 0.75 + (rpm / 6) * Math.PI * 1.5) + Math.PI / 2 + Math.PI;
   }
 
-  return { group: g, update, setLights, setRoof, get lightsOn() { return lightsOn; }, get roofOn() { return roofOn; } };
+  // beams in the air only show once it's getting dark
+  function setBeamStrength(d) { beamMat.opacity = 0.022 * d; }
+
+  return { group: g, update, setLights, setRoof, setBeamStrength, get lightsOn() { return lightsOn; }, get roofOn() { return roofOn; } };
 }

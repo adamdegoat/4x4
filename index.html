@@ -55,6 +55,7 @@
   #brake { right: calc(max(18px, env(safe-area-inset-right)) + 104px); bottom: 18px; width: 92px; height: 96px; line-height: .9; text-align: center; }
   #brake small { display: block; font-size: 14px; opacity: .6; }
 
+  [hidden] { display: none !important; }
   .ibtn { position: fixed; z-index: 8; width: 44px; height: 40px; border: 2px solid rgba(233,225,194,.3); border-radius: 8px;
     background: rgba(10,14,12,.35); display: grid; place-items: center; touch-action: none; }
   .ibtn svg { width: 24px; height: 24px; stroke: rgba(233,225,194,.85); fill: none; stroke-width: 2; }
@@ -87,15 +88,13 @@
 <div id="start">
   <div class="card">
     <h1>4x4</h1>
-    <div class="where">Borneo interior. Night. Test drive.</div>
+    <div class="where">Borneo interior. Deep jungle.</div>
     <div class="ctl-list">
       <b class="tc">Left thumb</b><span class="tc">drag left / right to steer</span>
       <b class="tc">Right thumb</b><span class="tc">GAS, or BRAKE (hold it to reverse)</span>
-      <b class="tc">Top right</b><span class="tc">headlights and roof bar</span>
       <b class="kb">W / Up</b><span class="kb">gas</span>
       <b class="kb">S / Down</b><span class="kb">brake, hold to reverse</span>
       <b class="kb">A D / Left Right</b><span class="kb">steer</span>
-      <b class="kb">L / K</b><span class="kb">headlights / roof bar</span>
     </div>
     <div class="go"><span class="tc">TAP TO START</span><span class="kb">CLICK TO START</span></div>
   </div>
@@ -107,8 +106,8 @@
 <div id="brake" class="pedal ctl t">BRAKE<small>hold: reverse</small></div>
 <div id="gas" class="pedal ctl t">GAS</div>
 <div id="btnPause" class="ibtn ctl"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg></div>
-<div id="btnLights" class="ibtn ctl"><svg viewBox="0 0 24 24"><path d="M10 6c-4 0-6 3-6 6s2 6 6 6c2 0 3-2 3-6s-1-6-3-6z"/><path d="M16 8h5M16 12h5M16 16h5"/></svg></div>
-<div id="btnRoof" class="ibtn ctl"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="5" rx="1"/><path d="M6 14l-1 4M12 14v4M18 14l1 4"/></svg></div>
+<div id="btnLights" class="ibtn ctl" hidden><svg viewBox="0 0 24 24"><path d="M10 6c-4 0-6 3-6 6s2 6 6 6c2 0 3-2 3-6s-1-6-3-6z"/><path d="M16 8h5M16 12h5M16 16h5"/></svg></div>
+<div id="btnRoof" class="ibtn ctl" hidden><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="5" rx="1"/><path d="M6 14l-1 4M12 14v4M18 14l1 4"/></svg></div>
 <div id="btnReset" class="ibtn">FLIP BACK OVER</div>
 <div id="fps"></div>
 
@@ -120,7 +119,7 @@
 </div>
 
 <div id="rotate"><div><svg viewBox="0 0 64 64"><rect x="18" y="8" width="28" height="48" rx="4"/><path d="M52 40a20 20 0 0 1-20 18M50 50l2-10 8 4"/></svg><div>Turn your phone sideways</div></div></div>
-<small id="build">build 260925-0012</small>
+<small id="build">build 260925-0028</small>
 
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/" } }

@@ -10,8 +10,9 @@ export const psxUniforms = {
 
 // Patch a material so its vertices snap. Cockpit parts skip this (they're
 // glued to the camera, and snapping would make them shimmer).
-export function psxify(mat) {
+export function psxify(mat, extra = null, key = '') {
   mat.onBeforeCompile = (sh) => {
+    if (extra) extra(sh);
     sh.uniforms.uSnap = psxUniforms.uSnap;
     sh.vertexShader = 'uniform vec2 uSnap;\n' + sh.vertexShader.replace(
       '#include <project_vertex>',
@@ -24,7 +25,7 @@ export function psxify(mat) {
       }`
     );
   };
-  mat.customProgramCacheKey = () => 'psx';
+  mat.customProgramCacheKey = () => 'psx' + key;
   return mat;
 }
 
