@@ -355,6 +355,49 @@ export function buildWorld(scene, tex, seed = 7) {
   fireflies.frustumCulled = false;
   scene.add(fireflies);
 
+  // ---- sun shafts: soft slanted beams where light breaks through the canopy ----
+  // Additive, faded by distance in the shader (normal fog would brighten them).
+  const shaftGeo = crossedCards(3.2, 26, 2, 0);
+  { // lean the beams down-sun: the sun sits low in the west (-x)
+    const m = new THREE.Matrix4().makeRotationZ(0.55);
+    shaftGeo.applyMatrix4(m);
+  }
+  const shaftMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(0xfff0c8) }, uStrength: { value: 0.22 } },
+    vertexShader: `
+      varying float vFade; varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        vec4 mv = viewMatrix * wp;
+        float d = -mv.z;
+        vFade = smoothstep(2.5, 9.0, d) * (1.0 - smoothstep(26.0, 58.0, d));
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uStrength; uniform float uTime;
+      varying float vFade; varying vec2 vUv;
+      void main(){
+        // soft across the beam, fading out near the ground and high up
+        float across = 1.0 - abs(vUv.x * 2.0 - 1.0);
+        float along = smoothstep(0.0, 0.25, vUv.y) * (1.0 - smoothstep(0.7, 1.0, vUv.y));
+        float flicker = 0.85 + 0.15 * sin(uTime * 0.6 + vUv.y * 3.0);
+        float a = across * across * along * vFade * uStrength * flicker;
+        if (a < 0.004) discard;
+        gl_FragColor = vec4(uColor * a, 1.0);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+  });
+  const shafts = scatter(420, (x, z) => !inWater(x, z), (x, z) => ({ x, y: terrain.groundAt(x, z) - 1, z, s: 0.8 + rnd() * 0.9, sy: 1, ry: (rnd() - 0.5) * 0.5 }));
+  // keep the lean pointing the same way: yaw only a little
+  for (const [ch, list] of shafts) {
+    const im = new THREE.InstancedMesh(shaftGeo, shaftMat, list.length);
+    list.forEach((o, i) => im.setMatrixAt(i, tmpM.compose(tmpP.set(o.x, o.y, o.z), tmpQ.setFromEuler(tmpE.set(0, o.ry, 0)), tmpS.set(o.s, 1, o.s))));
+    im.computeBoundingSphere();
+    im.renderOrder = 4;
+    ch.add(im);
+  }
+
   const brushAt = (x, z) => sampleGrid(brush, x, z);
 
   function update(camPos, time, farDist, ff = 1) {
@@ -367,7 +410,8 @@ export function buildWorld(scene, tex, seed = 7) {
     }
     ffMat.uniforms.uTime.value = time;
     ffMat.uniforms.uCenter.value.copy(camPos);
+    shaftMat.uniforms.uTime.value = time;
   }
 
-  return { terrain, treeGrid, brushAt, update, mats, chunks };
+  return { terrain, treeGrid, brushAt, update, mats, chunks, shaftMat };
 }

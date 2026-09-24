@@ -39,20 +39,20 @@
   /* ---------- in-game controls ---------- */
   body:not(.playing) .ctl { display: none !important; }
   body.playing:not(.touch) .ctl.t { display: none; }
-  #steerZone { position: fixed; left: 0; top: 56px; bottom: 0; width: 46vw; z-index: 5; touch-action: none; }
+  #steerZone { position: fixed; right: 0; top: 56px; bottom: 0; width: 50vw; z-index: 5; touch-action: none; }
   #steerRing { position: fixed; width: 110px; height: 44px; margin: -22px 0 0 -55px; border: 2px solid rgba(233,225,194,.28);
     border-radius: 22px; pointer-events: none; z-index: 6; display: none; }
   #steerRing.on { display: block; }
   #steerKnob { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
     background: rgba(233,225,194,.35); }
-  #steerHint { position: fixed; left: max(22px, env(safe-area-inset-left)); bottom: 18px; color: rgba(217,220,200,.35); font-size: 17px; z-index: 4; pointer-events: none; }
+  #steerHint { position: fixed; right: max(22px, env(safe-area-inset-right)); bottom: 18px; color: rgba(217,220,200,.35); font-size: 17px; z-index: 4; pointer-events: none; }
   body.steered #steerHint { display: none; }
 
   .pedal { position: fixed; z-index: 7; border: 2px solid rgba(233,225,194,.35); background: rgba(10,14,12,.35); color: rgba(233,225,194,.8);
     display: grid; place-items: center; font-size: 22px; letter-spacing: 1px; touch-action: none; border-radius: 10px; }
   .pedal.down { background: rgba(233,225,194,.25); color: #fff; }
-  #gas { right: max(18px, env(safe-area-inset-right)); bottom: 18px; width: 92px; height: 150px; }
-  #brake { right: calc(max(18px, env(safe-area-inset-right)) + 104px); bottom: 18px; width: 92px; height: 96px; line-height: .9; text-align: center; }
+  #gas { left: max(18px, env(safe-area-inset-left)); bottom: 18px; width: 92px; height: 150px; }
+  #brake { left: calc(max(18px, env(safe-area-inset-left)) + 104px); bottom: 18px; width: 92px; height: 96px; line-height: .9; text-align: center; }
   #brake small { display: block; font-size: 14px; opacity: .6; }
 
   [hidden] { display: none !important; }
@@ -90,8 +90,8 @@
     <h1>4x4</h1>
     <div class="where">Borneo interior. Deep jungle.</div>
     <div class="ctl-list">
-      <b class="tc">Left thumb</b><span class="tc">drag left / right to steer</span>
-      <b class="tc">Right thumb</b><span class="tc">GAS, or BRAKE (hold it to reverse)</span>
+      <b class="tc">Left thumb</b><span class="tc">GAS, or BRAKE (hold it to reverse)</span>
+      <b class="tc">Right thumb</b><span class="tc">drag left / right to steer</span>
       <b class="kb">W / Up</b><span class="kb">gas</span>
       <b class="kb">S / Down</b><span class="kb">brake, hold to reverse</span>
       <b class="kb">A D / Left Right</b><span class="kb">steer</span>
@@ -119,7 +119,7 @@
 </div>
 
 <div id="rotate"><div><svg viewBox="0 0 64 64"><rect x="18" y="8" width="28" height="48" rx="4"/><path d="M52 40a20 20 0 0 1-20 18M50 50l2-10 8 4"/></svg><div>Turn your phone sideways</div></div></div>
-<small id="build">build 260925-0028</small>
+<small id="build">build 260925-0036</small>
 
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/" } }
