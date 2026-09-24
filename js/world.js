@@ -195,7 +195,7 @@ export function buildWorld(scene, tex, seed = 7) {
     let guard = 0, placed = 0;
     while (placed < count && guard++ < count * 8) {
       const [x, z] = pick();
-      if (!accept(x, z)) continue;
+      if (!accept(x, z) || terrain.nearSite(x, z)) continue;
       const inst = make(x, z);
       if (!inst) continue;
       const ch = chunkOf(x, z);

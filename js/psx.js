@@ -170,6 +170,49 @@ export function makeTextures() {
     hardAlpha(g, s);
   }, { repeat: false, alpha: true });
 
+  // weathered planks
+  T.planks = canvasTex(32, (g, s) => {
+    const r = rng(31);
+    for (let y = 0; y < s; y += 4) {
+      const v = r();
+      g.fillStyle = v < 0.3 ? '#5d4a36' : v < 0.6 ? '#6b5640' : v < 0.85 ? '#4f3f2e' : '#77654c';
+      g.fillRect(0, y, s, 4);
+      g.fillStyle = '#2e241a'; g.fillRect(0, y + 3, s, 1);
+      g.fillStyle = '#3b3024'; g.fillRect((r() * s) | 0, y, 1, 3);
+    }
+    for (let i = 0; i < 40; i++) { g.fillStyle = r() < 0.5 ? '#56603a' : '#83786a'; g.fillRect((r() * s) | 0, (r() * s) | 0, 1 + ((r() * 3) | 0), 1); }
+  });
+
+  // rusted corrugated iron
+  T.rust = canvasTex(32, (g, s) => {
+    const r = rng(41);
+    for (let x = 0; x < s; x++) { g.fillStyle = x % 4 < 2 ? '#7a4a2a' : '#5e3820'; g.fillRect(x, 0, 1, s); }
+    for (let i = 0; i < 160; i++) {
+      const v = r();
+      g.fillStyle = v < 0.35 ? '#8f5a2e' : v < 0.6 ? '#4a2c1a' : v < 0.8 ? '#9a7a5a' : '#6b6a60';
+      g.fillRect((r() * s) | 0, (r() * s) | 0, 1 + ((r() * 3) | 0), 1 + ((r() * 2) | 0));
+    }
+  });
+
+  // limestone: pale, streaked, mossy at the base
+  T.lime = canvasTex(32, (g, s) => {
+    const r = rng(51);
+    g.fillStyle = '#a8a596'; g.fillRect(0, 0, s, s);
+    for (let x = 0; x < s; x += 1 + ((r() * 3) | 0)) { g.fillStyle = r() < 0.5 ? '#8e8b7e' : '#b9b6a8'; g.fillRect(x, 0, 1, s); }
+    for (let i = 0; i < 120; i++) { g.fillStyle = r() < 0.6 ? '#55653a' : '#6f6c60'; g.fillRect((r() * s) | 0, (s * 0.5 + r() * s * 0.5) | 0, 2, 1 + ((r() * 2) | 0)); }
+  });
+
+  // faded yellow truck paint over rust
+  T.paint = canvasTex(32, (g, s) => {
+    const r = rng(61);
+    g.fillStyle = '#a88a3a'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 220; i++) {
+      const v = r();
+      g.fillStyle = v < 0.45 ? '#7a4a2a' : v < 0.65 ? '#bfa257' : v < 0.85 ? '#5e3820' : '#8c7a55';
+      g.fillRect((r() * s) | 0, (r() * s) | 0, 1 + ((r() * 4) | 0), 1 + ((r() * 2) | 0));
+    }
+  });
+
   return T;
 }
 

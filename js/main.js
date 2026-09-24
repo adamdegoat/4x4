@@ -6,6 +6,8 @@ import { buildCockpit, HEAD } from './cockpit.js';
 import { Sound } from './audio.js';
 import { Input } from './input.js';
 import { Sky } from './sky.js';
+import { buildLandmarks } from './landmarks.js';
+import { MiniMap } from './minimap.js';
 
 const Q = new URLSearchParams(location.search);
 const LINES = +Q.get('res') || 240;       // vertical render resolution, the PS1 ran 240
@@ -38,7 +40,9 @@ const sky = new Sky(scene, hemi, sun, +Q.get('time') || 0);
 // ---- world + car ----
 const tex = makeTextures();
 const world = buildWorld(scene, tex, 7);
+const landmarks = buildLandmarks(scene, world, tex);
 const car = new Vehicle(world);
+const minimap = new MiniMap(world.terrain, document.getElementById('minimap'), document.getElementById('fullmap'));
 const carObj = new THREE.Group();
 scene.add(carObj);
 const cockpit = buildCockpit(carObj);
@@ -58,6 +62,7 @@ function resize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   psx.setSize(w, h);
+  minimap.resize();
 }
 addEventListener('resize', resize);
 resize();
@@ -125,12 +130,21 @@ function frame(now) {
   psx.mat.uniforms.uTint.value.setScalar(sk.tint);
   cockpit.setBeamStrength(sk.dark);
   world.update(camera.position, now / 1000, FAR, sk.ff);
+  landmarks.update(camera.position, FAR);
+  if (running) minimap.update(dt, car);
   if (running) sound.update(car, dt);
   else for (const k in car.events) car.events[k] = 0;
   psx.render(scene, camera);
 
   fpsN++; fpsT += dt;
   if (fpsT > 0.5) { fps = fpsN / fpsT; fpsN = 0; fpsT = 0; fpsEl.textContent = fps.toFixed(0) + ' fps'; }
+}
+// compile every shader now, so the first look at a new place doesn't stutter
+{
+  const vis = [];
+  scene.traverse((o) => { if (o.isGroup || o.isMesh) { vis.push([o, o.visible]); o.visible = true; } });
+  renderer.compile(scene, camera);
+  for (const [o, v] of vis) o.visible = v;
 }
 requestAnimationFrame(frame);
 
@@ -153,6 +167,7 @@ input.onPause = () => {
   if (!running) return;
   paused = !paused;
   document.body.classList.toggle('paused', paused);
+  if (paused) minimap.drawFull(car);
   if (paused) sound.ctx?.suspend(); else { sound.ctx?.resume(); last = performance.now(); }
 };
 document.getElementById('resume').addEventListener('pointerdown', (e) => { e.preventDefault(); input.onPause(); });

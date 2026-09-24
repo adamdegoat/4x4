@@ -105,6 +105,63 @@ export function buildTerrain(seed = 7) {
     return broad(x, z) - 1.35;
   };
 
+  // --- landmarks: where the named places sit --------------------------------
+  const sites = {};
+  {
+    // bridge: where a path crosses the stream
+    let best = null;
+    for (const p of paths) for (let i = 2; i < p.length - 2; i++) {
+      const d = Math.abs(p[i][1] - streamZ(p[i][0]));
+      if (!best || d < best.d) best = { d, p, i };
+    }
+    const { p, i } = best;
+    const a = Math.atan2(p[i + 2][1] - p[i - 2][1], p[i + 2][0] - p[i - 2][0]);
+    sites.bridge = { x: p[i][0], z: streamZ(p[i][0]), a, len: 24, w: 4.2 };
+
+    const side = (pt, nxt, off) => { // point offset to the left of the path
+      const a = Math.atan2(nxt[1] - pt[1], nxt[0] - pt[0]);
+      return { x: pt[0] - Math.sin(a) * off, z: pt[1] + Math.cos(a) * off, a };
+    };
+    const j = Math.floor(trail.length * 0.45);
+    sites.camp = side(trail[j - 6], trail[j - 5], -17);
+    sites.truck = side(trail[Math.floor(trail.length * 0.78)], trail[Math.floor(trail.length * 0.78) + 1], 5.5);
+    const e = branch[branch.length - 1], e2 = branch[branch.length - 3];
+    sites.landing = { x: e[0], z: e[1], a: Math.atan2(e[1] - e2[1], e[0] - e2[0]) };
+
+    // tower on the highest open ground, karst outcrop somewhere quiet
+    let hi = null, karst = null;
+    for (let k = 0; k < 900; k++) {
+      const x = (rnd() * 2 - 1) * 140, z = (rnd() * 2 - 1) * 140;
+      if (distToPaths(x, z) < 12 || Math.abs(z - streamZ(x)) < 14) continue;
+      const far = (o) => !o || Math.hypot(o.x - x, o.z - z) > 60;
+      const h = broad(x, z);
+      if (!hi || h > hi.h) hi = { x, z, h };
+      if (Object.values(sites).every(far) && (!karst || distToPaths(x, z) > distToPaths(karst.x, karst.z)) && distToPaths(x, z) < 45) karst = { x, z };
+    }
+    sites.tower = { x: hi.x, z: hi.z };
+    sites.karst = karst || { x: 100, z: -100 };
+  }
+  // level the ground for the camp and the log landing
+  const flatten = (cx, cz, r) => {
+    let sum = 0, n = 0;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = -HALF + i * CELL, z = -HALF + j * CELL;
+      if (Math.hypot(x - cx, z - cz) < r * 0.5) { sum += heights[j * N + i]; n++; }
+    }
+    const target = sum / Math.max(1, n);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = -HALF + i * CELL, z = -HALF + j * CELL, d = Math.hypot(x - cx, z - cz);
+      if (d < r) { const k = j * N + i; heights[k] += (target - heights[k]) * (1 - smoothstep(r * 0.65, r, d)); mud[k] *= 0.4; }
+    }
+  };
+  flatten(sites.camp.x, sites.camp.z, 18);
+  flatten(sites.landing.x, sites.landing.z, 20);
+  const nearSite = (x, z, pad = 0) => {
+    const r = { camp: 16, landing: 18, truck: 6, tower: 7, karst: 12, bridge: 14 };
+    for (const k in sites) if (Math.hypot(x - sites[k].x, z - sites[k].z) < r[k] + pad) return k;
+    return null;
+  };
+
   // --- obstacles the wheels can climb: fallen logs and rocks ----------------
   const logs = [];
   const rocks = [];
@@ -114,6 +171,7 @@ export function buildTerrain(seed = 7) {
     const x = (rnd() * 2 - 1) * (HALF - 45), z = (rnd() * 2 - 1) * (HALF - 45);
     const nearTrail = distToPaths(x, z) < 6;
     if (nearTrail && rnd() > 0.35) continue; // a few block the trail on purpose
+    if (nearSite(x, z, 6)) continue;
     const len = 5 + rnd() * 9, r = 0.2 + rnd() * 0.24, a = rnd() * Math.PI;
     const y = heightRaw(x, z) + r * 0.55; // half sunk into the leaf litter
     logs.push({ x, z, a, len, r, y, ca: Math.cos(a), sa: Math.sin(a) });
@@ -123,6 +181,7 @@ export function buildTerrain(seed = 7) {
     const x = (rnd() * 2 - 1) * (HALF - 40), z = (rnd() * 2 - 1) * (HALF - 40);
     const near = Math.abs(z - streamZ(x)) < 10 ? 1 : 0; // rocks cluster in the stream
     if (!near && rnd() > 0.45) continue;
+    if (nearSite(x, z, 2)) continue;
     const r = 0.25 + rnd() * rnd() * 0.8;
     rocks.push({ x, z, r, y: heightRaw(x, z) - r * 0.35 });
   }
@@ -141,6 +200,17 @@ export function buildTerrain(seed = 7) {
     binAdd(l, Math.min(-hx, hx) + l.x - 1, Math.min(-hz, hz) + l.z - 1, Math.max(-hx, hx) + l.x + 1, Math.max(-hz, hz) + l.z + 1);
   }
   for (const r of rocks) { r.type = 1; binAdd(r, r.x - r.r, r.z - r.r, r.x + r.r, r.z + r.r); }
+  // the bridge deck: a driveable plank surface, sloped bank to bank
+  {
+    const b = sites.bridge, ca = Math.cos(b.a), sa = Math.sin(b.a);
+    const y0 = sampleGrid(heights, b.x - ca * b.len / 2, b.z - sa * b.len / 2) + 0.12;
+    const y1 = sampleGrid(heights, b.x + ca * b.len / 2, b.z + sa * b.len / 2) + 0.12;
+    const mid = Math.max(y0, y1, waterY(b.x) + 0.9);
+    const deck = { type: 2, x: b.x, z: b.z, ca, sa, len: b.len, w: b.w, y0, y1, mid };
+    b.deck = deck;
+    const r = b.len / 2 + 1;
+    binAdd(deck, b.x - r, b.z - r, b.x + r, b.z + r);
+  }
 
   function obstacleTop(x, z) {
     const a = Math.floor((x + HALF) / BIN), b = Math.floor((z + HALF) / BIN);
@@ -155,6 +225,12 @@ export function buildTerrain(seed = 7) {
         if (Math.abs(across) >= o.r) continue;
         const t = o.y + Math.sqrt(o.r * o.r - across * across);
         if (t > top) top = t;
+      } else if (o.type === 2) {
+        const dx = x - o.x, dz = z - o.z;
+        const along = dx * o.ca + dz * o.sa, across = -dx * o.sa + dz * o.ca;
+        if (Math.abs(along) > o.len / 2 || Math.abs(across) > o.w / 2) continue;
+        const t = deckY(o, along);
+        if (t > top) top = t;
       } else {
         const dx = x - o.x, dz = z - o.z, d2 = dx * dx + dz * dz;
         if (d2 >= o.r * o.r) continue;
@@ -165,6 +241,15 @@ export function buildTerrain(seed = 7) {
     return top;
   }
 
+  // deck height: ramps up from each bank to a level middle section
+  function deckY(o, along) {
+    const u = along / (o.len / 2); // -1..1
+    const ramp = 0.35;
+    if (u < -1 + ramp) return o.y0 + (o.mid - o.y0) * ((u + 1) / ramp);
+    if (u > 1 - ramp) return o.y1 + (o.mid - o.y1) * ((1 - u) / ramp);
+    return o.mid;
+  }
+
   const heightAt = (x, z) => Math.max(sampleGrid(heights, x, z), obstacleTop(x, z));
   const groundAt = (x, z) => sampleGrid(heights, x, z);
   const fieldAt = (arr, x, z) => sampleGrid(arr, x, z);
@@ -172,15 +257,15 @@ export function buildTerrain(seed = 7) {
   // surface grip + drag at a point
   function surfaceAt(x, z) {
     const m = fieldAt(mud, x, z);
-    const w = Math.abs(z - streamZ(x)) < 9 && groundAt(x, z) < waterY(x) ? 1 : 0; // only the stream itself
+    const w = Math.abs(z - streamZ(x)) < 9 && heightAt(x, z) < waterY(x) ? 1 : 0; // only the stream itself, and not on the bridge
     return { mud: m, water: w, grip: lerp(1.0, 0.5, m) * (w ? 0.75 : 1) };
   }
 
   const start = { x: trail[3][0], z: trail[3][1], heading: Math.atan2(trail[6][0] - trail[3][0], trail[6][1] - trail[3][1]) };
 
-  const waterDepthAt = (x, z) => (Math.abs(z - streamZ(x)) < 9 ? Math.max(0, waterY(x) - groundAt(x, z)) : 0);
+  const waterDepthAt = (x, z) => (Math.abs(z - streamZ(x)) < 9 ? Math.max(0, waterY(x) - heightAt(x, z)) : 0);
 
-  return { waterDepthAt, heights, trailW, mud, wet, logs, rocks, paths, streamZ, waterY, heightAt, groundAt, surfaceAt, distToPaths, start, broad };
+  return { sites, nearSite, deckY, waterDepthAt, heights, trailW, mud, wet, logs, rocks, paths, streamZ, waterY, heightAt, groundAt, surfaceAt, distToPaths, start, broad };
 }
 
 export function sampleGrid(arr, x, z) {
